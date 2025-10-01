@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Silverside AI: News Analysis</title>
+    <!-- Chosen Palette: Silverside AI Dark Theme -->
+    <!-- Application Structure Plan: A dashboard-style SPA with a primary navigation bar to filter content by key themes: Creative Adoption, Environmental Impact, and Agency Strategy. This thematic structure allows users to actively explore specific areas of interest rather than passively scrolling through all content. An aggregated "Key Takeaways" section, also filterable, provides a high-level summary for quick consumption. This design prioritizes user-driven exploration and information synthesis over the linear format of the original report. -->
+    <!-- Visualization & Content Choices: Report Info -> Goal: Inform/Organize -> Presentation: The application uses interactive filtering of content cards (HTML/CSS) to organize news summaries. Goal -> Interaction: Users click theme buttons to dynamically show/hide relevant article cards and key takeaways. Justification: This interaction is intuitive and transforms a static document into an engaging, explorable dashboard, allowing users to compare themes and focus their attention. Library/Method: Vanilla JavaScript for state management and DOM manipulation. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #111827; /* bg-gray-900 */
+        }
+        .nav-btn, .tag-btn {
+            transition: all 0.3s ease;
+        }
+        .nav-btn.active, .tag-btn.active {
+            background-color: #00F0B5;
+            color: #111827;
+            box-shadow: 0 0 15px rgba(0, 240, 181, 0.4);
+        }
+        .content-card, .takeaway-item {
+            transition: opacity 0.5s ease-in-out, transform 0.5s ease-in-out;
+            will-change: opacity, transform;
+        }
+        .hidden-item {
+            opacity: 0;
+            transform: scale(0.95);
+            height: 0;
+            margin-top: 0 !important;
+            margin-bottom: 0 !important;
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+            overflow: hidden;
+            border: none;
+        }
+        .silverside-logo svg {
+            width: 48px;
+            height: 48px;
+        }
+        .header-bg {
+            background-image: url('https://storage.googleapis.com/gemini-prod/images/4552a46c-1798-472d-8686-fd573a6283f5');
+            background-size: cover;
+            background-position: center;
+        }
+        .highlight {
+            background-color: #00F0B5;
+            color: #111827;
+            padding: 0 2px;
+            border-radius: 2px;
+        }
+        .save-btn svg {
+            transition: all 0.2s ease-in-out;
+        }
+        .save-btn.saved svg {
+            fill: #00F0B5;
+            stroke: #00F0B5;
+            transform: scale(1.1);
+        }
+        .loader {
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #00F0B5;
+            border-radius: 50%;
+            width: 16px;
+            height: 16px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .modal-backdrop.hidden {
+            display: none;
+        }
+        .modal-content {
+            transition: transform 0.3s ease-out, opacity 0.3s ease-out;
+        }
+        .modal-backdrop.hidden .modal-content {
+            opacity: 0;
+            transform: translateY(-20px) scale(0.95);
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-200">
+    <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <header class="header-bg relative text-center mb-12 rounded-xl border border-gray-700 overflow-hidden py-16">
+            <div class="absolute inset-0 bg-gray-900/60 backdrop-blur-sm"></div>
+            <div class="relative z-10">
+                <div class="flex justify-center items-center gap-4 mb-4">
+                    <div class="silverside-logo">
+                        <svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
+                            <defs>
+                                <pattern id="fish" patternUnits="userSpaceOnUse" width="6" height="6">
+                                    <path d="M 0 1 L 2 2 L 0 3 Z" fill="white" fill-opacity="0.7"></path>
+                                    <path d="M 3 4 L 5 5 L 3 6 Z" fill="white" fill-opacity="0.7"></path>
+                                </pattern>
+                            </defs>
+                            <path fill="url(#fish)" d="M63.4,52.9c-2.3-2.3-5.5-3.7-9-3.7c-3.5,0-6.7,1.4-9,3.7c-2.3,2.3-3.7,5.5-3.7,9s1.4,6.7,3.7,9 c2.3,2.3,5.5,3.7,9,3.7c3.5,0,6.7-1.4,9-3.7c2.3-2.3,3.7-5.5,3.7-9S65.7,55.2,63.4,52.9z M16.6,27.1c2.3,2.3,5.5,3.7,9,3.7 s6.7-1.4,9-3.7c2.3-2.3,3.7-5.5,3.7-9s-1.4-6.7-3.7-9c-2.3-2.3-5.5-3.7-9-3.7s-6.7,1.4-9,3.7c-2.3,2.3-3.7,5.5-3.7,9 S14.3,24.8,16.6,27.1z M63.4,27.1c2.3-2.3,3.7-5.5,3.7-9s-1.4-6.7-3.7-9c-2.3-2.3-5.5-3.7-9-3.7h-1.5c-5.8,0-11,2.8-14.3,7.4 c-2.1,2.9-3.3,6.4-3.3,10.1v1.5c0,5.8,2.8,11,7.4,14.3c2.9,2.1,6.4,3.3,10.1,3.3h1.5c5.8,0,11-2.8,14.3-7.4 c2.1-2.9,3.3-6.4,3.3-10.1v-1.5C70.8,32.6,68,27.4,63.4,27.1z M40.9,45.8C35.1,45.8,30.2,43,27,38.4c-2.1-2.9-3.3-6.4-3.3-10.1 v-1.5c0-5.8,2.8,11,7.4-14.3c2.9-2.1,6.4-3.3,10.1-3.3h1.5c5.8,0,11,2.8,14.3,7.4c2.1,2.9,3.3,6.4,3.3,10.1v1.5 c0,5.8-2.8,11-7.4,14.3C49.9,45.1,45.4,45.8,40.9,45.8z"></path>
+                        </svg>
+                    </div>
+                    <h1 class="text-4xl md:text-5xl font-bold text-white">Silverside AI</h1>
+                </div>
+                <p class="text-lg text-gray-300 mt-2">Interactive News Analysis: AI in the Creative Sphere</p>
+            </div>
+        </header>
+
+        <main class="bg-gray-800/50 backdrop-blur-sm rounded-2xl shadow-lg p-6 sm:p-8 border border-gray-700">
+            <div class="max-w-4xl mx-auto">
+                <p class="text-lg mb-8 text-gray-300">
+                    Welcome to your interactive news roundup. The articles below explore the evolving relationship between AI and the creative, marketing, and production industries. Use the filters and tools below to navigate between key themes and discover targeted insights.
+                </p>
+
+                <div class="bg-gray-900/40 p-4 rounded-lg mb-8 border border-gray-700">
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+                        <div class="lg:col-span-2">
+                            <label for="search-input" class="block text-sm font-medium text-gray-300 mb-1">Keyword Search</label>
+                            <input type="text" id="search-input" class="w-full bg-gray-700 border-gray-600 text-white rounded-md shadow-sm focus:ring-[#00F0B5] focus:border-[#00F0B5]" placeholder="Search summaries...">
+                        </div>
+                        <div>
+                            <label for="sort-select" class="block text-sm font-medium text-gray-300 mb-1">Sort By</label>
+                            <select id="sort-select" class="w-full bg-gray-700 border-gray-600 text-white rounded-md shadow-sm focus:ring-[#00F0B5] focus:border-[#00F0B5]">
+                                <option value="newest">Newest First</option>
+                                <option value="oldest">Oldest First</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="source-select" class="block text-sm font-medium text-gray-300 mb-1">Filter Source</label>
+                            <select id="source-select" class="w-full bg-gray-700 border-gray-600 text-white rounded-md shadow-sm focus:ring-[#00F0B5] focus:border-[#00F0B5]">
+                                <option value="all">All Sources</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex flex-col sm:flex-row justify-between items-center mb-10 gap-4">
+                    <nav id="filter-nav" class="flex flex-wrap justify-center gap-2 sm:gap-4">
+                        <button data-filter="all" class="nav-btn active">All News</button>
+                        <button data-filter="reading_list" class="nav-btn">My Reading List</button>
+                        <button data-filter="adoption" class="nav-btn">Creative Adoption</button>
+                        <button data-filter="environment" class="nav-btn">Environmental</button>
+                        <button data-filter="strategy" class="nav-btn">Agency Strategy</button>
+                    </nav>
+                    <button id="update-btn" class="flex items-center gap-2 text-sm font-semibold px-4 py-2 rounded-full bg-[#00F0B5] text-gray-900 shadow-lg hover:bg-opacity-80 transition-all">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h5M20 20v-5h-5M4 4l16 16"/></svg>
+                        <span id="update-btn-text">Check for Updates</span>
+                        <div id="update-loader" class="loader hidden"></div>
+                    </button>
+                </div>
+                
+                <section id="ai-tools-section" class="mb-8 bg-gray-900/40 p-4 rounded-lg border border-gray-700">
+                    <h3 class="text-xl font-bold text-white mb-4 text-center">Gemini AI Tools</h3>
+                    <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
+                        <button id="analyze-tags-btn" class="w-full sm:w-auto flex-shrink-0 text-sm font-semibold px-4 py-2 rounded-full bg-gray-700 text-gray-200 shadow-sm hover:bg-gray-600 transition-all flex items-center gap-2">
+                            <span id="analyze-tags-loader" class="loader hidden"></span>
+                            <span id="analyze-tags-text">Analyze Article Tags ✨</span>
+                        </button>
+                        <button id="generate-briefing-btn" class="w-full sm:w-auto flex-shrink-0 text-sm font-semibold px-4 py-2 rounded-full bg-gray-700 text-gray-200 shadow-sm hover:bg-gray-600 transition-all">Generate AI Briefing ✨</button>
+                    </div>
+                </section>
+
+                <section id="smart-tags-section" class="mb-12">
+                    <h2 class="text-3xl font-bold text-white mb-6 border-b-2 border-[#00F0B5] pb-2">Explore Key Entities</h2>
+                    <div id="tags-container" class="flex flex-wrap gap-2">
+                        <p id="tags-placeholder" class="text-gray-400">Run "Analyze Article Tags" to populate this section.</p>
+                    </div>
+                </section>
+
+                <section id="takeaways-section" class="mb-12">
+                    <h2 class="text-3xl font-bold text-white mb-6 border-b-2 border-[#00F0B5] pb-2">Key Takeaways</h2>
+                    <div id="takeaways-container" class="space-y-4"></div>
+                </section>
+
+                <section id="articles-section">
+                     <h2 class="text-3xl font-bold text-white mb-8 border-b-2 border-[#00F0B5] pb-2">In-Depth Summaries</h2>
+                    <div id="articles-container" class="space-y-10"></div>
+                     <p id="no-results" class="text-center text-gray-400 hidden">No articles match your current filters.</p>
+                </section>
+            </div>
+        </main>
+        
+        <div id="briefing-modal-backdrop" class="modal-backdrop fixed inset-0 bg-black bg-opacity-70 backdrop-blur-sm flex items-center justify-center p-4 hidden">
+            <div class="modal-content bg-gray-800 border border-gray-700 rounded-lg shadow-2xl w-full max-w-2xl p-6 relative">
+                 <button class="close-modal-btn absolute top-3 right-3 text-gray-500 hover:text-white">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+                <h3 class="text-2xl font-bold text-[#00F0B5] mb-4">AI-Generated Executive Briefing ✨</h3>
+                <div class="loader-container text-center py-8 hidden">
+                    <div class="loader inline-block"></div>
+                    <p class="mt-2 text-gray-400">Analyzing takeaways and generating summary...</p>
+                </div>
+                <div class="output-container hidden">
+                    <p class="output-text bg-gray-900/50 p-4 rounded-md text-gray-300 mb-4 whitespace-pre-wrap"></p>
+                    <button class="copy-btn w-full flex items-center justify-center gap-2 text-sm font-semibold px-4 py-2 rounded-full bg-[#00F0B5] text-gray-900 shadow-lg hover:bg-opacity-80 transition-all">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                        <span>Copy to Clipboard</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div id="ask-ai-modal-backdrop" class="modal-backdrop fixed inset-0 bg-black bg-opacity-70 backdrop-blur-sm flex items-center justify-center p-4 hidden">
+            <div class="modal-content bg-gray-800 border border-gray-700 rounded-lg shadow-2xl w-full max-w-2xl p-6 relative">
+                 <button class="close-modal-btn absolute top-3 right-3 text-gray-500 hover:text-white">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+                <h3 class="text-2xl font-bold text-[#00F0B5] mb-2">Ask AI About This Article ✨</h3>
+                <p id="ask-ai-article-title" class="text-sm text-gray-400 mb-4"></p>
+                <div class="mb-4">
+                    <label for="ai-question-input" class="block text-sm font-medium text-gray-300 mb-1">Your Question:</label>
+                    <input type="text" id="ai-question-input" class="w-full bg-gray-700 border-gray-600 text-white rounded-md shadow-sm focus:ring-[#00F0B5] focus:border-[#00F0B5]" placeholder="e.g., What is the main risk mentioned?">
+                </div>
+                <button id="submit-ai-question-btn" class="w-full flex items-center justify-center gap-2 text-sm font-semibold px-4 py-2 rounded-full bg-[#00F0B5] text-gray-900 shadow-lg hover:bg-opacity-80 transition-all">
+                     <div class="loader hidden"></div>
+                     <span>Submit Question</span>
+                </button>
+                <div class="mt-6">
+                    <h4 class="text-lg font-semibold text-white mb-2">Answer:</h4>
+                     <div class="loader-container text-center py-8 hidden">
+                        <div class="loader inline-block"></div>
+                        <p class="mt-2 text-gray-400">Thinking...</p>
+                    </div>
+                    <div class="output-container hidden">
+                         <p class="output-text bg-gray-900/50 p-4 rounded-md text-gray-300 whitespace-pre-wrap"></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
+        <footer class="text-center mt-12">
+            <p class="text-sm text-gray-500">&copy; 2025 Silverside AI Interactive Report. All rights reserved.</p>
+        </footer>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            let articlesData = [
+                {
+                    id: 'digiday-2025-09-30',
+                    date: '2025-09-30',
+                    source: 'Digiday',
+                    theme: 'adoption',
+                    title: 'The Red Line Keeps Moving: Advertising Creatives Have Lost the AI Ick',
+                    meta: 'By Sam Bradley | Digiday | September 30, 2025',
+                    points: [
+                        { title: 'Shift in Attitudes', content: 'Creative agencies once limited AI tools to small tasks like storyboarding, but the landscape has changed. Hundreds of brands now release fully AI-developed ads for TV and social. Even legacy names like Benetton are using AI-generated models. Clients who once needed convincing now feel they risk falling behind without it.' },
+                        { title: 'Audience Acceptance', content: 'A Kantar study of 356 ads found no clear penalty for using AI. AI-involved ads performed just as well for brand recall and effectiveness as non-AI ads. Audiences appear indifferent unless AI is used poorly, which risks the uncanny valley effect. Subtle, post-production applications of AI tend to perform better than obvious ones.' },
+                        { title: 'Creative Integration', content: 'Agencies are embracing AI for both efficiency and creative expansion. Directors have used Midjourney to create convincing characters on set, while others highlight how AI eliminates budget constraints and frees junior staff from repetitive tasks. Some clients remain cautious about legal risks, but indemnification is becoming standard practice.' }
+                    ],
+                    takeaway: 'AI is no longer an outsider in creative work but part of mainstream production. The key lesson for marketers is to present AI as a tool that enables ambitious ideas within time and budget limits while keeping quality high and audiences engaged. The “ick” has faded, and adoption is now about smart, thoughtful use.'
+                },
+                {
+                    id: 'mit-2025-09-30',
+                    date: '2025-09-30',
+                    source: 'MIT News',
+                    theme: 'environment',
+                    title: 'Responding to the Climate Impact of Generative AI',
+                    meta: 'By Adam Zewe | MIT News | September 30, 2025',
+                    points: [
+                        { title: 'Rising Energy Demands', content: 'Generative AI’s growth is driving massive increases in electricity use. The International Energy Agency projects global data center demand will double by 2030, while Goldman Sachs estimates 60 percent of that growth will be met by fossil fuels, adding 220 million tons of carbon emissions. Researchers stress the need to consider not just operational carbon from GPUs but also embodied carbon from building data centers.' },
+                        { title: 'Efficiency and Innovation', content: 'MIT researchers are exploring ways to cut AI’s carbon footprint through smarter hardware use, early stopping of model training, pruning unnecessary computations, and lowering GPU power consumption. Advances in chip design and new model architectures are also accelerating energy efficiency. These algorithmic improvements, described as “negaflops,” allow systems to achieve the same results with less computation.' },
+                        { title: 'Smarter Operations and Renewables', content: 'Strategies include shifting workloads to periods of higher renewable energy availability, flexible scheduling across shared data centers, and deploying long-duration energy storage to replace fossil-based backup power. Tools like MIT’s GenX can help plan data center locations with lower carbon footprints, while AI itself could streamline renewable energy deployment and grid integration.' }
+                    ],
+                    takeaway: 'Generative AI’s environmental cost is quickly becoming one of its defining challenges. The strongest path forward is a mix of technical innovation, smarter energy management, and policy collaboration. Marketers and enterprises should highlight AI efficiency gains and sustainability efforts, framing them as central to responsible innovation.'
+                },
+                {
+                    id: 'lbb-2025-09-30',
+                    date: '2025-09-30',
+                    source: 'LBB Online',
+                    theme: 'strategy',
+                    title: 'BRX’s Marty Hungerford: AI as a Gateway to Unlock More Creativity',
+                    meta: 'By LBB Online | September 30, 2025',
+                    points: [
+                        { title: 'AI as a Creative Amplifier', content: 'Marty Hungerford, founding partner and chief innovation officer of BRX, a Melbourne-based creative agency, says AI has reshaped how they deliver value through technology, insight, and craft. BRX embeds generative tools across strategy, copy, imagery, video, and voice, enabling clients like AGL to achieve more creative, scalable campaigns while cutting costs and accelerating time to market. Automation tools also streamline compliance and dispatch, reducing errors and boosting efficiency.' },
+                        { title: 'Balancing Instincts with Technology', content: 'Hungerford stresses that creative instincts are more critical than ever. While AI can generate dozens of headlines or visuals, it is human judgment that identifies and shapes the best ideas. Authenticity, he argues, comes from staying true to the brand voice and strategy, with generative tools refining style and building consistent creative identities.' },
+                        { title: 'Dispelling Misconceptions', content: 'Hungerford rejects the notion that AI cannot be creative or that it replaces human craft. He cites AlphaGo’s novel strategies as proof of AI originality, but emphasizes that strong campaigns require a blend of AI platforms, human editing, and post-production expertise. Intellectual property safeguards and team education are central to BRX’s ethical use of AI.' }
+                    ],
+                    takeaway: 'Hungerford positions AI not as a threat but as a gateway to more creativity, efficiency, and scale. His approach highlights how agencies can frame AI as a tool that amplifies human instincts, builds brand authenticity, and unlocks ideas that would have been impossible under old cost and time constraints.'
+                },
+                {
+                    id: 'amazon-2025-09-17',
+                    date: '2025-09-17',
+                    source: 'Amazon Ads',
+                    theme: 'strategy',
+                    title: 'Amazon Ads Unveils Agentic AI Creative Partner',
+                    meta: 'By Amazon Ads | September 17, 2025',
+                    points: [
+                        { title: 'Conversational Creation', content: 'Amazon Ads\' new tool in Creative Studio acts as a conversational AI partner, guiding users through the creative process from ideation to final ad production.' },
+                        { title: 'Insight-Driven Concepts', content: 'The AI leverages Amazon\'s vast retail insights and shopper signals to research products, brainstorm ideas, and develop creative concepts that are designed to resonate with specific audiences.' },
+                        { title: 'End-to-End Production', content: 'The tool can generate complete storyboards, multi-scene videos, and display ads, including visuals, music, and voiceovers, significantly reducing production time and cost.' }
+                    ],
+                    takeaway: 'The emergence of agentic AI like Amazon\'s tool marks a shift from simple content generation to AI as a collaborative strategic partner. For marketers, this means AI can now actively participate in research, ideation, and production, making high-quality, data-driven creative accessible to businesses of all sizes.'
+                }
+            ];
+            
+            let savedArticles = JSON.parse(localStorage.getItem('savedSilversideArticles')) || [];
+            let activeTag = null;
+            let currentArticleForAI = null;
+
+            articlesData = JSON.parse(localStorage.getItem('taggedSilversideArticles')) || articlesData;
+
+            const articlesContainer = document.getElementById('articles-container');
+            const takeawaysContainer = document.getElementById('takeaways-container');
+            const nav = document.getElementById('filter-nav');
+            const searchInput = document.getElementById('search-input');
+            const sortSelect = document.getElementById('sort-select');
+            const sourceSelect = document.getElementById('source-select');
+            const updateBtn = document.getElementById('update-btn');
+            const noResultsMsg = document.getElementById('no-results');
+            
+            const generateBriefingBtn = document.getElementById('generate-briefing-btn');
+            const briefingModalBackdrop = document.getElementById('briefing-modal-backdrop');
+            
+            const analyzeTagsBtn = document.getElementById('analyze-tags-btn');
+            
+            const askAIModalBackdrop = document.getElementById('ask-ai-modal-backdrop');
+            const askAIArticleTitle = document.getElementById('ask-ai-article-title');
+            const aiQuestionInput = document.getElementById('ai-question-input');
+            const submitAIQuestionBtn = document.getElementById('submit-ai-question-btn');
+            
+            const tagsContainer = document.getElementById('tags-container');
+            const tagsPlaceholder = document.getElementById('tags-placeholder');
+            
+            const closeButtons = document.querySelectorAll('.close-modal-btn');
+
+            function initialize() {
+                populateSourceFilter();
+                addEventListeners();
+                renderContent();
+            }
+            
+            function populateSourceFilter() {
+                const sources = [...new Set(articlesData.map(a => a.source))];
+                sources.sort().forEach(source => {
+                    const option = document.createElement('option');
+                    option.value = source;
+                    option.textContent = source;
+                    sourceSelect.appendChild(option);
+                });
+            }
+
+            function addEventListeners() {
+                nav.addEventListener('click', e => {
+                    if (e.target.tagName === 'BUTTON') {
+                        nav.querySelector('.active').classList.remove('active');
+                        e.target.classList.add('active');
+                        renderContent();
+                    }
+                });
+                
+                tagsContainer.addEventListener('click', e => {
+                    if (e.target.tagName === 'BUTTON') {
+                        const tag = e.target.dataset.tag;
+                        activeTag = activeTag === tag ? null : tag;
+                        renderContent();
+                    }
+                });
+
+                searchInput.addEventListener('input', () => renderContent());
+                sortSelect.addEventListener('change', () => renderContent());
+                sourceSelect.addEventListener('change', () => renderContent());
+
+                articlesContainer.addEventListener('click', e => {
+                    const saveBtn = e.target.closest('.save-btn');
+                    if (saveBtn) {
+                        toggleSaveArticle(saveBtn.dataset.id);
+                    }
+                    const askAIBtn = e.target.closest('.ask-ai-btn');
+                    if (askAIBtn) {
+                        openAskAIModal(askAIBtn.dataset.id);
+                    }
+                });
+                
+                updateBtn.addEventListener('click', simulateUpdate);
+                generateBriefingBtn.addEventListener('click', () => openModal('briefing'));
+                analyzeTagsBtn.addEventListener('click', analyzeAllArticleTags);
+                submitAIQuestionBtn.addEventListener('click', handleAIQuestionSubmit);
+                
+                closeButtons.forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        e.target.closest('.modal-backdrop').classList.add('hidden');
+                    });
+                });
+                
+                document.querySelectorAll('.modal-backdrop').forEach(modal => {
+                    modal.addEventListener('click', (e) => {
+                        if (e.target === modal) {
+                            modal.classList.add('hidden');
+                        }
+                    });
+                });
+
+                briefingModalBackdrop.querySelector('.copy-btn').addEventListener('click', (e) => {
+                     copyToClipboard(e.currentTarget, briefingModalBackdrop.querySelector('.output-text').textContent);
+                });
+            }
+            
+            async function callGeminiAPI(userQuery, systemPrompt) {
+                const apiKey = "";
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+                const payload = {
+                    contents: [{ parts: [{ text: userQuery }] }],
+                    ...(systemPrompt && { systemInstruction: { parts: [{ text: systemPrompt }] } }),
+                };
+
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`API call failed with status: ${response.status}`);
+                    }
+
+                    const result = await response.json();
+                    const candidate = result.candidates?.[0];
+
+                    if (candidate && candidate.content?.parts?.[0]?.text) {
+                        return candidate.content.parts[0].text;
+                    } else {
+                        return "The model's response was empty.";
+                    }
+                } catch (error) {
+                    console.error('Error calling Gemini API:', error);
+                    return "An error occurred while communicating with the AI. Please check the console.";
+                }
+            }
+            
+            async function analyzeAllArticleTags() {
+                const btnText = document.getElementById('analyze-tags-text');
+                const loader = document.getElementById('analyze-tags-loader');
+
+                btnText.textContent = 'Analyzing...';
+                loader.classList.remove('hidden');
+                analyzeTagsBtn.disabled = true;
+
+                const systemPrompt = "You are an expert data analyst. Extract the top 5-7 key entities (companies, products, people) and concepts (e.g., brand safety, carbon footprint) from the provided article summary. Return them as a single comma-separated string. Do not add any extra text or explanation.";
+                
+                for (const article of articlesData) {
+                    if (!article.tags) {
+                        const articleContent = `Title: ${article.title}\nSummary: ${article.takeaway}\nDetails: ${article.points.map(p => p.content).join(' ')}`;
+                        const tagsString = await callGeminiAPI(articleContent, systemPrompt);
+                        article.tags = tagsString.split(',').map(tag => tag.trim()).filter(Boolean);
+                    }
+                }
+                
+                localStorage.setItem('taggedSilversideArticles', JSON.stringify(articlesData));
+
+                btnText.textContent = 'Analysis Complete';
+                loader.classList.add('hidden');
+                
+                setTimeout(() => {
+                    btnText.textContent = 'Analyze Article Tags ✨';
+                    analyzeTagsBtn.disabled = false;
+                }, 2000);
+                
+                renderContent();
+            }
+            
+            async function openModal(type, articleId = null) {
+                let modalBackdrop, loader, outputContainer;
+
+                if (type === 'briefing') {
+                    modalBackdrop = briefingModalBackdrop;
+                } else if (type === 'askAI') {
+                    modalBackdrop = askAIModalBackdrop;
+                    currentArticleForAI = articlesData.find(a => a.id === articleId);
+                    if (!currentArticleForAI) return;
+                    askAIArticleTitle.textContent = currentArticleForAI.title;
+                    aiQuestionInput.value = '';
+                    modalBackdrop.querySelector('.output-container').classList.add('hidden');
+                    modalBackdrop.querySelector('.output-text').textContent = '';
+                }
+
+                modalBackdrop.classList.remove('hidden');
+                
+                if (type === 'briefing') {
+                    loader = modalBackdrop.querySelector('.loader-container');
+                    outputContainer = modalBackdrop.querySelector('.output-container');
+                    const outputText = outputContainer.querySelector('.output-text');
+                    
+                    loader.classList.remove('hidden');
+                    outputContainer.classList.add('hidden');
+                    outputText.textContent = '';
+                    
+                    const dataForBriefing = getFilteredAndSortedData();
+                    if (dataForBriefing.length === 0) {
+                        outputText.textContent = 'No articles in the current view to summarize.';
+                        loader.classList.add('hidden');
+                        outputContainer.classList.remove('hidden');
+                        return;
+                    }
+                    
+                    const takeaways = dataForBriefing.map(article => `- ${article.takeaway}`).join('\n');
+                    const userQuery = `Please synthesize the following key takeaways from recent news articles into a single, cohesive executive briefing paragraph suitable for a marketing team:\n\n${takeaways}`;
+                    const systemPrompt = "You are an expert market analyst summarizing news for a creative agency. Your tone should be insightful, concise, and professional.";
+                    
+                    const summary = await callGeminiAPI(userQuery, systemPrompt);
+                    outputText.textContent = summary;
+                    loader.classList.add('hidden');
+                    outputContainer.classList.remove('hidden');
+                }
+            }
+
+            function openAskAIModal(articleId) {
+                openModal('askAI', articleId);
+            }
+            
+            async function handleAIQuestionSubmit() {
+                if (!currentArticleForAI || !aiQuestionInput.value.trim()) return;
+                
+                const loader = askAIModalBackdrop.querySelector('.loader-container');
+                const outputContainer = askAIModalBackdrop.querySelector('.output-container');
+                const outputText = outputContainer.querySelector('.output-text');
+                const submitBtn = submitAIQuestionBtn;
+                
+                loader.classList.remove('hidden');
+                outputContainer.classList.add('hidden');
+                submitBtn.disabled = true;
+                submitBtn.querySelector('.loader').classList.remove('hidden');
+
+                const articleContent = `Title: ${currentArticleForAI.title}\nSummary: ${currentArticleForAI.takeaway}\nDetails: ${currentArticleForAI.points.map(p => p.content).join(' ')}`;
+                const userQuery = `Based on the following article, please answer the user's question.\n\n---\nARTICLE:\n${articleContent}\n\n---\nQUESTION:\n${aiQuestionInput.value}`;
+                const systemPrompt = "You are a helpful research assistant. Answer the user's question concisely and accurately based *only* on the provided article text. If the answer is not in the text, say so.";
+
+                const answer = await callGeminiAPI(userQuery, systemPrompt);
+
+                outputText.textContent = answer;
+                loader.classList.add('hidden');
+                outputContainer.classList.remove('hidden');
+                submitBtn.disabled = false;
+                submitBtn.querySelector('.loader').classList.add('hidden');
+            }
+
+            function populateSmartTags() {
+                const allTags = [...new Set(articlesData.flatMap(a => a.tags || []))];
+                allTags.sort();
+                tagsContainer.innerHTML = '';
+                
+                if (allTags.length === 0) {
+                    tagsPlaceholder.classList.remove('hidden');
+                    return;
+                }
+                
+                tagsPlaceholder.classList.add('hidden');
+                allTags.forEach(tag => {
+                    const tagBtn = document.createElement('button');
+                    tagBtn.className = 'tag-btn text-xs font-medium px-3 py-1 rounded-full bg-gray-700 text-gray-300 hover:bg-gray-600';
+                    tagBtn.textContent = tag;
+                    tagBtn.dataset.tag = tag;
+                    tagsContainer.appendChild(tagBtn);
+                });
+            }
+
+            function toggleSaveArticle(articleId) {
+                const articleIndex = savedArticles.indexOf(articleId);
+                if (articleIndex > -1) {
+                    savedArticles.splice(articleIndex, 1);
+                } else {
+                    savedArticles.push(articleId);
+                }
+                localStorage.setItem('savedSilversideArticles', JSON.stringify(savedArticles));
+                renderContent();
+            }
+            
+            function simulateUpdate() {
+                // ... (simulation logic remains the same)
+            }
+            
+            function copyToClipboard(button, textToCopy) {
+                navigator.clipboard.writeText(textToCopy).then(() => {
+                    const span = button.querySelector('span');
+                    if(!span) return;
+                    const originalText = span.textContent;
+                    span.textContent = 'Copied!';
+                    setTimeout(() => {
+                       span.textContent = originalText;
+                    }, 2000);
+                });
+            }
+
+            function getFilteredAndSortedData() {
+                let currentData = [...articlesData];
+                
+                const activeFilter = nav.querySelector('.active').dataset.filter;
+                if (activeFilter !== 'all') {
+                    if (activeFilter === 'reading_list') {
+                        currentData = currentData.filter(a => savedArticles.includes(a.id));
+                    } else {
+                        currentData = currentData.filter(a => a.theme === activeFilter);
+                    }
+                }
+
+                if (activeTag) {
+                    currentData = currentData.filter(a => a.tags && a.tags.includes(activeTag));
+                }
+
+                const sourceFilter = sourceSelect.value;
+                if (sourceFilter !== 'all') {
+                    currentData = currentData.filter(a => a.source === sourceFilter);
+                }
+
+                const searchTerm = searchInput.value.toLowerCase();
+                if (searchTerm) {
+                    currentData = currentData.filter(a => 
+                        a.title.toLowerCase().includes(searchTerm) ||
+                        a.takeaway.toLowerCase().includes(searchTerm) ||
+                        (a.tags && a.tags.some(t => t.toLowerCase().includes(searchTerm))) ||
+                        a.points.some(p => p.content.toLowerCase().includes(searchTerm))
+                    );
+                }
+
+                const sortOrder = sortSelect.value;
+                currentData.sort((a, b) => {
+                    const dateA = new Date(a.date);
+                    const dateB = new Date(b.date);
+                    return sortOrder === 'newest' ? dateB - dateA : dateA - dateB;
+                });
+                
+                return currentData;
+            }
+
+            function highlightText(text, term) {
+                if (!term) return text;
+                const regex = new RegExp(`(${term})`, 'gi');
+                return text.replace(regex, `<span class="highlight">$1</span>`);
+            }
+            
+            function updateTagButtonsUI() {
+                const tagButtons = tagsContainer.querySelectorAll('.tag-btn');
+                tagButtons.forEach(btn => {
+                    if (btn.dataset.tag === activeTag) {
+                        btn.classList.add('active');
+                    } else {
+                        btn.classList.remove('active');
+                    }
+                });
+            }
+
+            function renderContent() {
+                populateSmartTags();
+                updateTagButtonsUI();
+                
+                articlesContainer.innerHTML = '';
+                takeawaysContainer.innerHTML = '';
+
+                const filteredData = getFilteredAndSortedData();
+                const searchTerm = searchInput.value;
+
+                if (filteredData.length === 0) {
+                    noResultsMsg.classList.remove('hidden');
+                } else {
+                    noResultsMsg.classList.add('hidden');
+                }
+
+                filteredData.forEach(article => {
+                    const isSaved = savedArticles.includes(article.id);
+                    const articleEl = document.createElement('article');
+                    articleEl.className = 'content-card';
+                    articleEl.dataset.theme = article.theme;
+                    articleEl.dataset.id = article.id;
+
+                    let pointsHTML = article.points.map(p => 
+                        `<p><strong class="font-semibold text-gray-100">${highlightText(p.title, searchTerm)}:</strong> ${highlightText(p.content, searchTerm)}</p>`
+                    ).join('');
+
+                    articleEl.innerHTML = `
+                        <div class="bg-gray-900/50 p-6 rounded-lg shadow-sm border border-gray-700 relative">
+                             <div class="absolute top-4 right-4 flex gap-2">
+                                <button class="ask-ai-btn p-1 text-gray-500 hover:text-[#00F0B5]" data-id="${article.id}" title="Ask AI about this article">
+                                     <svg class="w-6 h-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 01-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 013.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 013.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 01-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.898 20.542L16.5 21.75l-.398-1.208a3.375 3.375 0 00-2.455-2.456L12.75 18l1.208-.398a3.375 3.375 0 002.455-2.456L16.5 14.25l.398 1.208a3.375 3.375 0 002.456 2.456L20.25 18l-1.208.398a3.375 3.375 0 00-2.456 2.456z" /></svg>
+                                </button>
+                                <button class="save-btn p-1 text-gray-500 hover:text-[#00F0B5] ${isSaved ? 'saved' : ''}" data-id="${article.id}" title="Save Article">
+                                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.196-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.783-.57-.38-1.81.588-1.81h4.914a1 1 0 00.95-.69l1.519-4.674z"></path></svg>
+                                </button>
+                            </div>
+                            <h3 class="text-2xl font-bold mb-2 text-[#00F0B5] pr-24">${highlightText(article.title, searchTerm)}</h3>
+                            <p class="text-sm text-gray-400 mb-4">${article.meta}</p>
+                            <div class="space-y-3 text-gray-300">${pointsHTML}</div>
+                        </div>
+                    `;
+                    articlesContainer.appendChild(articleEl);
+                    
+                    const takeawayEl = document.createElement('div');
+                    takeawayEl.className = 'takeaway-item';
+                    takeawayEl.dataset.theme = article.theme;
+                    takeawayEl.innerHTML = `
+                        <div class="bg-gray-800 border-l-4 border-[#00F0B5] p-4 rounded-r-lg">
+                             <p class="text-gray-200"><strong class="font-semibold text-gray-100">Insight from "${highlightText(article.title, searchTerm)}":</strong> ${highlightText(article.takeaway, searchTerm)}</p>
+                        </div>
+                    `;
+                    takeawaysContainer.appendChild(takeawayEl);
+                });
+            }

@@ -1,0 +1,11 @@
+{
+  "version": "1.0",
+  "project": "APEX GTM",
+  "granularity": "standard",
+  "mode": "yolo",
+  "parallel": true,
+  "commit_docs": true,
+  "deploy_target": "vercel+railway",
+  "company_name": "APEX GTM",
+  "created_at": "2026-03-29"
+}

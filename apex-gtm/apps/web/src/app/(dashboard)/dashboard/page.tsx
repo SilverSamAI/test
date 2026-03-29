@@ -1,274 +1,217 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { useEffect, useState } from "react";
 import {
-  TrendingUp, Users, Mail, Phone, Target,
-  ArrowUpRight, ArrowDownRight, Bot, Activity,
-  Zap, Clock, CheckCircle2, AlertCircle,
+  TrendingUp, DollarSign, CheckCircle2,
+  Zap, Bot, RefreshCw, Phone,
 } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, BarChart, Bar
+  Tooltip, ResponsiveContainer,
 } from "recharts";
 import { AgentFeed } from "@/components/agents/AgentFeed";
 import { MetricCard, type MetricCardProps } from "@/components/ui/MetricCard";
 import { cn } from "@/lib/utils";
 
-const pipelineData = [
-  { month: "Oct", value: 280000, closed: 120000 },
-  { month: "Nov", value: 340000, closed: 180000 },
-  { month: "Dec", value: 290000, closed: 160000 },
-  { month: "Jan", value: 420000, closed: 210000 },
-  { month: "Feb", value: 510000, closed: 280000 },
-  { month: "Mar", value: 680000, closed: 340000 },
-];
+const container = { hidden: {}, show: { transition: { staggerChildren: 0.05 } } };
+const item = { hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0 } };
 
-const conversionData = [
-  { stage: "Prospects", count: 1240 },
-  { stage: "Contacted", count: 680 },
-  { stage: "Qualified", count: 290 },
-  { stage: "Demo", count: 142 },
-  { stage: "Proposal", count: 68 },
-  { stage: "Closed", count: 31 },
-];
+function fmt(n: number) {
+  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `$${Math.round(n / 1_000)}k`;
+  return `$${n}`;
+}
 
-const metrics: MetricCardProps[] = [
-  {
-    label: "Pipeline Value",
-    value: "$2.4M",
-    change: "+18.2%",
-    up: true,
-    icon: TrendingUp,
-    accent: "blue",
-    sub: "vs last quarter",
-  },
-  {
-    label: "Active Prospects",
-    value: "1,240",
-    change: "+124",
-    up: true,
-    icon: Users,
-    accent: "purple",
-    sub: "AI-sourced today",
-  },
-  {
-    label: "Sequences Active",
-    value: "47",
-    change: "68% open rate",
-    up: true,
-    icon: Mail,
-    accent: "green",
-    sub: "across all cadences",
-  },
-  {
-    label: "Meetings Booked",
-    value: "18",
-    change: "+3 this week",
-    up: true,
-    icon: Phone,
-    accent: "blue",
-    sub: "via AI outreach",
-  },
-];
-
-const agentStatus = [
-  { name: "SDR Agent", status: "active", task: "Enriching 47 Apollo leads", runs: 1240 },
-  { name: "Deal Intel", status: "active", task: "Analyzing Fireflies call #284", runs: 891 },
-  { name: "GTM Engine", status: "idle", task: "Strategy refresh at 3pm", runs: 204 },
-  { name: "Marketing AI", status: "active", task: "Drafting LinkedIn campaign", runs: 567 },
-];
-
-const container = {
-  hidden: { opacity: 0 },
-  show: { opacity: 1, transition: { staggerChildren: 0.08 } },
-};
-const item = { hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } };
-
-const CustomTooltip = ({ active, payload, label }: any) => {
+function CustomTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="glass px-3 py-2 rounded-xl text-xs">
+    <div className="bg-apex-card border border-apex-border rounded-xl px-3 py-2 text-xs shadow-xl">
       <p className="text-apex-text-muted mb-1">{label}</p>
       {payload.map((p: any) => (
-        <p key={p.name} style={{ color: p.color }}>
-          {p.name === "value" ? "Pipeline" : "Closed"}: ${(p.value / 1000).toFixed(0)}k
-        </p>
+        <p key={p.name} style={{ color: p.color }}>{p.name}: {fmt(p.value)}</p>
       ))}
     </div>
   );
-};
+}
 
 export default function DashboardPage() {
+  const [metrics, setMetrics] = useState<any>(null);
+  const [byStage, setByStage] = useState<Record<string, any[]>>({});
+  const [transcripts, setTranscripts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  async function load() {
+    setLoading(true);
+    try {
+      const [dealsRes, transcriptsRes] = await Promise.all([
+        fetch("/api/deals"),
+        fetch("/api/transcripts?limit=5"),
+      ]);
+      const dealsData = await dealsRes.json();
+      const transcriptsData = await transcriptsRes.json();
+      setMetrics(dealsData.metrics || null);
+      setByStage(dealsData.byStage || {});
+      setTranscripts(transcriptsData.transcripts || []);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { load(); }, []);
+
+  // Build funnel data from real stage counts
+  const stageOrder = ["prospect", "qualified", "proposal", "negotiation", "closed_won"];
+  const stageLabels: Record<string, string> = {
+    prospect: "Prospect", qualified: "Qualified", proposal: "Proposal",
+    negotiation: "Contract Sent", closed_won: "Won",
+  };
+  const conversionData = stageOrder.map(s => ({
+    stage: stageLabels[s],
+    count: (byStage[s] || []).length,
+  }));
+
+  const metricCards: MetricCardProps[] = metrics ? [
+    { label: "Total Pipeline", value: fmt(metrics.totalPipeline), change: `${metrics.activeCount} active`, up: true, icon: TrendingUp, accent: "blue", sub: "live HubSpot data" },
+    { label: "Weighted Forecast", value: fmt(metrics.weightedForecast), change: "probability-weighted", up: true, icon: Zap, accent: "purple", sub: "vs target" },
+    { label: "Closed Won", value: fmt(metrics.totalWon), change: `${metrics.wonCount} deals`, up: true, icon: CheckCircle2, accent: "green", sub: "all time" },
+    { label: "Win Rate", value: `${metrics.winRate}%`, change: `${metrics.wonCount} won`, up: metrics.winRate > 30, icon: DollarSign, accent: "green", sub: "closed deals" },
+  ] : [];
+
   return (
-    <div className="p-6 space-y-6 max-w-[1600px]">
+    <div className="p-6 space-y-5">
       {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: -8 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex items-center justify-between"
-      >
+      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-apex-text-primary flex items-center gap-2">
-            War Room
-            <span className="text-xs px-2 py-0.5 rounded-full bg-apex-green-dim border border-apex-green/30 text-apex-green-bright font-normal">
-              Live
-            </span>
-          </h2>
-          <p className="text-sm text-apex-text-muted mt-0.5">
-            4 agents working autonomously across your pipeline
-          </p>
+          <h2 className="text-2xl font-bold text-apex-text-primary">War Room</h2>
+          <p className="text-sm text-apex-text-muted mt-0.5">Live HubSpot pipeline · Fireflies call intelligence</p>
         </div>
-        <div className="flex gap-2">
-          <button className="px-4 py-2 rounded-xl bg-apex-surface border border-apex-border text-sm text-apex-text-secondary hover:border-apex-border-bright transition-colors">
-            Last 30 days
-          </button>
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            className="px-4 py-2 rounded-xl bg-gradient-to-r from-apex-blue to-apex-purple text-white text-sm font-medium flex items-center gap-2 glow-blue"
-          >
-            <Zap size={14} />
-            Run All Agents
-          </motion.button>
-        </div>
+        <button onClick={load} className="flex items-center gap-2 px-3 py-2 rounded-xl bg-apex-surface border border-apex-border text-sm text-apex-text-muted hover:text-apex-text-primary transition-colors">
+          <RefreshCw size={13} className={loading ? "animate-spin" : ""} />
+          Refresh
+        </button>
       </motion.div>
 
-      {/* Metric cards */}
-      <motion.div
-        variants={container}
-        initial="hidden"
-        animate="show"
-        className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4"
-      >
-        {metrics.map((m) => (
-          <motion.div key={m.label} variants={item}>
-            <MetricCard {...m} />
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <div className="flex items-center gap-3 text-apex-text-muted">
+            <RefreshCw size={16} className="animate-spin" />
+            <span className="text-sm">Loading live data…</span>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Metric cards */}
+          <motion.div variants={container} initial="hidden" animate="show" className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            {metricCards.map((m) => (
+              <motion.div key={m.label} variants={item}>
+                <MetricCard {...m} />
+              </motion.div>
+            ))}
           </motion.div>
-        ))}
-      </motion.div>
 
-      {/* Charts row */}
-      <motion.div
-        variants={container}
-        initial="hidden"
-        animate="show"
-        className="grid grid-cols-1 xl:grid-cols-3 gap-4"
-      >
-        {/* Pipeline trend */}
-        <motion.div
-          variants={item}
-          className="xl:col-span-2 glass rounded-2xl p-5"
-        >
-          <div className="flex items-center justify-between mb-5">
-            <div>
-              <h3 className="text-sm font-semibold text-apex-text-primary">Pipeline vs Closed</h3>
-              <p className="text-xs text-apex-text-muted mt-0.5">6-month trend</p>
-            </div>
-            <div className="flex gap-4 text-xs text-apex-text-muted">
-              <span className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-apex-blue" />
-                Pipeline
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-apex-green" />
-                Closed
-              </span>
-            </div>
-          </div>
-          <ResponsiveContainer width="100%" height={200}>
-            <AreaChart data={pipelineData}>
-              <defs>
-                <linearGradient id="blueGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#3B82F6" stopOpacity={0.3} />
-                  <stop offset="100%" stopColor="#3B82F6" stopOpacity={0} />
-                </linearGradient>
-                <linearGradient id="greenGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#10B981" stopOpacity={0.3} />
-                  <stop offset="100%" stopColor="#10B981" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1E2D40" />
-              <XAxis dataKey="month" tick={{ fill: "#475569", fontSize: 11 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: "#475569", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${v / 1000}k`} />
-              <Tooltip content={<CustomTooltip />} />
-              <Area type="monotone" dataKey="value" stroke="#3B82F6" strokeWidth={2} fill="url(#blueGrad)" />
-              <Area type="monotone" dataKey="closed" stroke="#10B981" strokeWidth={2} fill="url(#greenGrad)" />
-            </AreaChart>
-          </ResponsiveContainer>
-        </motion.div>
-
-        {/* Conversion funnel */}
-        <motion.div variants={item} className="glass rounded-2xl p-5">
-          <div className="mb-5">
-            <h3 className="text-sm font-semibold text-apex-text-primary">Conversion Funnel</h3>
-            <p className="text-xs text-apex-text-muted mt-0.5">This quarter</p>
-          </div>
-          <div className="space-y-3">
-            {conversionData.map((stage, i) => {
-              const pct = Math.round((stage.count / conversionData[0].count) * 100);
-              return (
-                <div key={stage.stage}>
-                  <div className="flex items-center justify-between text-xs mb-1">
-                    <span className="text-apex-text-secondary">{stage.stage}</span>
-                    <span className="text-apex-text-muted font-mono">{stage.count.toLocaleString()}</span>
-                  </div>
-                  <div className="h-1.5 bg-apex-surface rounded-full overflow-hidden">
-                    <motion.div
-                      initial={{ width: 0 }}
-                      animate={{ width: `${pct}%` }}
-                      transition={{ duration: 0.8, delay: i * 0.1 }}
-                      className="h-full rounded-full"
-                      style={{
-                        background: `linear-gradient(90deg, #3B82F6, #8B5CF6)`,
-                        opacity: 1 - i * 0.1,
-                      }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </motion.div>
-      </motion.div>
-
-      {/* Agents + Activity */}
-      <motion.div
-        variants={container}
-        initial="hidden"
-        animate="show"
-        className="grid grid-cols-1 xl:grid-cols-3 gap-4"
-      >
-        {/* Agent status grid */}
-        <motion.div variants={item} className="xl:col-span-1 space-y-3">
-          <h3 className="text-sm font-semibold text-apex-text-primary flex items-center gap-2">
-            <Bot size={14} className="text-apex-purple-bright" />
-            Agent Status
-          </h3>
-          {agentStatus.map((agent) => (
-            <div
-              key={agent.name}
-              className="glass rounded-xl p-4 flex items-start gap-3"
-            >
-              <div className={cn(
-                "w-2 h-2 rounded-full mt-1 shrink-0",
-                agent.status === "active" ? "bg-apex-green animate-pulse-slow" : "bg-apex-text-muted"
-              )} />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-apex-text-primary">{agent.name}</span>
-                  <span className="text-[10px] text-apex-text-muted font-mono">{agent.runs.toLocaleString()} runs</span>
-                </div>
-                <p className="text-xs text-apex-text-muted mt-0.5 truncate">{agent.task}</p>
+          {/* Charts row */}
+          <motion.div variants={container} initial="hidden" animate="show" className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+            {/* Pipeline funnel */}
+            <motion.div variants={item} className="xl:col-span-2 glass rounded-2xl p-5">
+              <div className="mb-5">
+                <h3 className="text-sm font-semibold text-apex-text-primary">Deal Funnel</h3>
+                <p className="text-xs text-apex-text-muted mt-0.5">Active deals by stage</p>
               </div>
-            </div>
-          ))}
-        </motion.div>
+              <ResponsiveContainer width="100%" height={200}>
+                <AreaChart data={conversionData}>
+                  <defs>
+                    <linearGradient id="funnelGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#3B82F6" stopOpacity={0.3} />
+                      <stop offset="100%" stopColor="#3B82F6" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1E2D40" />
+                  <XAxis dataKey="stage" tick={{ fill: "#475569", fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: "#475569", fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Area type="monotone" dataKey="count" name="Deals" stroke="#3B82F6" strokeWidth={2} fill="url(#funnelGrad)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </motion.div>
 
-        {/* Live agent feed */}
-        <motion.div variants={item} className="xl:col-span-2">
-          <AgentFeed />
-        </motion.div>
-      </motion.div>
+            {/* Stage breakdown */}
+            <motion.div variants={item} className="glass rounded-2xl p-5">
+              <div className="mb-5">
+                <h3 className="text-sm font-semibold text-apex-text-primary">By Stage</h3>
+                <p className="text-xs text-apex-text-muted mt-0.5">Deal count & value</p>
+              </div>
+              <div className="space-y-3">
+                {conversionData.filter(s => s.count > 0).map((s, i) => {
+                  const max = Math.max(...conversionData.map(x => x.count), 1);
+                  const pct = Math.round((s.count / max) * 100);
+                  return (
+                    <div key={s.stage}>
+                      <div className="flex items-center justify-between text-xs mb-1">
+                        <span className="text-apex-text-secondary">{s.stage}</span>
+                        <span className="text-apex-text-muted font-mono">{s.count}</span>
+                      </div>
+                      <div className="h-1.5 bg-apex-surface rounded-full overflow-hidden">
+                        <motion.div
+                          initial={{ width: 0 }}
+                          animate={{ width: `${pct}%` }}
+                          transition={{ duration: 0.8, delay: i * 0.1 }}
+                          className="h-full rounded-full bg-gradient-to-r from-apex-blue to-apex-purple"
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </motion.div>
+          </motion.div>
+
+          {/* Transcripts + Agent Feed */}
+          <motion.div variants={container} initial="hidden" animate="show" className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            {/* Recent calls from Fireflies */}
+            <motion.div variants={item} className="glass rounded-2xl p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <Phone size={14} className="text-apex-purple-bright" />
+                <h3 className="text-sm font-semibold text-apex-text-primary">Recent Calls</h3>
+                <span className="text-[10px] text-apex-purple-bright bg-apex-purple-dim px-2 py-0.5 rounded-full ml-auto">Fireflies</span>
+              </div>
+              <div className="space-y-3">
+                {transcripts.length === 0 && (
+                  <p className="text-xs text-apex-text-muted text-center py-4">No recent transcripts</p>
+                )}
+                {transcripts.map((t) => (
+                  <div key={t.id} className="p-3 rounded-xl bg-apex-surface/60 border border-apex-border">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-xs font-semibold text-apex-text-primary leading-snug">{t.title}</p>
+                      <span className="text-[10px] text-apex-text-muted font-mono shrink-0">
+                        {Math.round(t.duration)}m
+                      </span>
+                    </div>
+                    {t.overview && (
+                      <p className="text-[11px] text-apex-text-muted mt-1.5 line-clamp-2 leading-relaxed">
+                        {t.overview.replace(/\*\*/g, '').substring(0, 120)}…
+                      </p>
+                    )}
+                    {t.actionItems && (
+                      <div className="mt-2 pt-2 border-t border-apex-border">
+                        <p className="text-[10px] text-apex-blue-bright font-medium mb-1">Action items</p>
+                        <p className="text-[10px] text-apex-text-muted line-clamp-2">
+                          {t.actionItems.replace(/\*\*/g, '').substring(0, 100)}…
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+
+            {/* Agent feed */}
+            <motion.div variants={item}>
+              <AgentFeed />
+            </motion.div>
+          </motion.div>
+        </>
+      )}
     </div>
   );
 }

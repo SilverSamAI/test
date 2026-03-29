@@ -25,7 +25,7 @@ const accents = {
   },
 };
 
-interface MetricCardProps {
+export interface MetricCardProps {
   label: string;
   value: string;
   change: string;

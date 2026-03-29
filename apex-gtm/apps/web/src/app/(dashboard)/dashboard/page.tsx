@@ -11,7 +11,7 @@ import {
   Tooltip, ResponsiveContainer, BarChart, Bar
 } from "recharts";
 import { AgentFeed } from "@/components/agents/AgentFeed";
-import { MetricCard } from "@/components/ui/MetricCard";
+import { MetricCard, type MetricCardProps } from "@/components/ui/MetricCard";
 import { cn } from "@/lib/utils";
 
 const pipelineData = [
@@ -32,7 +32,7 @@ const conversionData = [
   { stage: "Closed", count: 31 },
 ];
 
-const metrics = [
+const metrics: MetricCardProps[] = [
   {
     label: "Pipeline Value",
     value: "$2.4M",

@@ -1,0 +1,25 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "postgres",
+      "runtimeExecutable": "/Applications/Docker.app/Contents/Resources/bin/docker",
+      "runtimeArgs": ["compose", "-f", "docker/docker-compose.yml", "up", "postgres"],
+      "port": 5432
+    },
+    {
+      "name": "alvin",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["next", "dev", "--turbopack", "--port", "3002"],
+      "cwd": "apps/web",
+      "port": 3002
+    },
+    {
+      "name": "sow-generator",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "apps/sow-generator",
+      "port": 3003
+    }
+  ]
+}

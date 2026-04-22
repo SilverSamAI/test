@@ -698,3 +698,9 @@
                     takeawaysContainer.appendChild(takeawayEl);
                 });
             }
+
+            initialize();
+        });
+    </script>
+</body>
+</html>

@@ -20,7 +20,7 @@ from typing import Optional
 import anthropic
 from playwright.sync_api import sync_playwright, Page, Browser
 
-CENTER_URL = "https://app.getcenter.com"
+CENTER_URL = "https://my.app-center.com"
 
 
 # ── Vision helpers ─────────────────────────────────────────────────────────────
@@ -151,33 +151,34 @@ def execute_action(page: Page, action: dict, log) -> bool:
 
 def login(page: Page, client: anthropic.Anthropic, email: str, password: str, log):
     log("Opening Center login page...")
-    page.goto(f"{CENTER_URL}/login", wait_until="domcontentloaded")
+    page.goto(f"{CENTER_URL}/login", wait_until="domcontentloaded", timeout=30000)
     page.wait_for_timeout(2000)
 
-    # Fill email
-    try:
-        page.fill('input[type="email"]', email, timeout=5000)
-    except Exception:
-        page.fill('input[name="email"]', email)
+    # Step 1: enter email and click Next
+    page.fill('#username', email, timeout=10000)
+    page.wait_for_timeout(500)
+    page.click('button[type="submit"]', timeout=5000)
+    log("  Submitted email, waiting for password step...")
+    page.wait_for_timeout(3000)
 
-    # Fill password
-    try:
-        page.fill('input[type="password"]', password, timeout=5000)
-    except Exception:
-        page.fill('input[name="password"]', password)
+    # Screenshot to see what appeared
+    page.screenshot(path="/tmp/center_after_email.png")
+
+    # Step 2: enter password (field name varies — try common selectors)
+    for sel in ['input[type="password"]', 'input[name="password"]', 'input[id="password"]', '#password']:
+        try:
+            page.fill(sel, password, timeout=5000)
+            log(f"  Filled password using selector: {sel}")
+            break
+        except Exception:
+            continue
 
     page.wait_for_timeout(500)
-
-    # Click sign in — try common selectors, fall back to vision
-    try:
-        page.click('button[type="submit"]', timeout=3000)
-    except Exception:
-        img = screenshot_b64(page)
-        action = ask_claude_for_action(client, img, "I just filled the login form. Click the sign-in button.")
-        execute_action(page, action, log)
-
-    page.wait_for_timeout(3000)
-    log("Logged in.")
+    page.click('button[type="submit"]', timeout=5000)
+    log("  Submitted password, waiting for dashboard...")
+    page.wait_for_timeout(4000)
+    page.screenshot(path="/tmp/center_after_login.png")
+    log("Login step complete.")
 
 
 # ── Expense processing via vision agent ────────────────────────────────────────
@@ -269,7 +270,7 @@ def run_browser_agent(
     with sync_playwright() as pw:
         browser: Browser = pw.chromium.launch(
             headless=headless,
-            args=["--no-sandbox", "--disable-dev-shm-usage"],
+            args=["--no-sandbox", "--disable-dev-shm-usage", "--ignore-certificate-errors"],
         )
         context = browser.new_context(viewport={"width": 1440, "height": 900})
         page = context.new_page()
